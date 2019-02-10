@@ -47,6 +47,13 @@ public class Protocol1_13_1To1_13 extends Protocol {
                 handler(new PacketHandler() {
                     @Override
                     public void handle(PacketWrapper wrapper) throws Exception {
+                        Item item = wrapper.get(Type.FLAT_ITEM, 0);
+                        InventoryPackets.toServer(item);
+                    }
+                });
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
                         int hand = wrapper.read(Type.VAR_INT);
                         if (hand == 1) {
                             wrapper.cancel();
@@ -78,6 +85,22 @@ public class Protocol1_13_1To1_13 extends Protocol {
                                 wrapper.passthrough(Type.STRING); // JSON Tooltip
                             }
                         }
+                    }
+                });
+            }
+        });
+
+        // Set cooldown
+        registerOutgoing(State.PLAY, 0x18, 0x18, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.VAR_INT); // Item
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        wrapper.set(Type.VAR_INT, 0,
+                                InventoryPackets.getNewItemId(wrapper.get(Type.VAR_INT, 0))
+                        );
                     }
                 });
             }

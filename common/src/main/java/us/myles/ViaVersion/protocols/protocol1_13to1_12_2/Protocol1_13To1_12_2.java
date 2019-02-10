@@ -17,12 +17,18 @@ import us.myles.ViaVersion.api.remapper.ValueCreator;
 import us.myles.ViaVersion.api.remapper.ValueTransformer;
 import us.myles.ViaVersion.api.type.Type;
 import us.myles.ViaVersion.packets.State;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.blockconnections.ConnectionData;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.blockconnections.providers.BlockConnectionProvider;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.blockconnections.providers.PacketBlockConnectionProvider;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.BlockIdData;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.MappingData;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.RecipeData;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.EntityPackets;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.InventoryPackets;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.WorldPackets;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.providers.BlockEntityProvider;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.providers.PaintingProvider;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.BlockConnectionStorage;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.BlockStorage;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.EntityTracker;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.TabCompleteTracker;
@@ -30,6 +36,7 @@ import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.types.Particle1_13Type
 import us.myles.ViaVersion.protocols.protocol1_9_3to1_9_1_2.storage.ClientWorld;
 import us.myles.ViaVersion.util.GsonUtil;
 
+import java.util.EnumMap;
 import java.util.Map;
 
 // Development of 1.13 support!
@@ -46,58 +53,83 @@ public class Protocol1_13To1_12_2 extends Protocol {
         }
     };
 
-    public static final PacketHandler SEND_DECLARE_COMMANDS_AND_TAGS = new PacketHandler() { // *insert here a good name*
-        @Override
-        public void handle(PacketWrapper w) throws Exception {
-            // Send fake declare commands
-            w.create(0x11, new ValueCreator() {
+    public static final PacketHandler SEND_DECLARE_COMMANDS_AND_TAGS =
+            new PacketHandler() { // *insert here a good name*
                 @Override
-                public void write(PacketWrapper wrapper) {
-                    wrapper.write(Type.VAR_INT, 2); // Size
-                    // Write root node
-                    wrapper.write(Type.VAR_INT, 0); // Mark as command
-                    wrapper.write(Type.VAR_INT, 1); // 1 child
-                    wrapper.write(Type.VAR_INT, 1); // Child is at 1
+                public void handle(PacketWrapper w) throws Exception {
+                    // Send fake declare commands
+                    w.create(0x11, new ValueCreator() {
+                        @Override
+                        public void write(PacketWrapper wrapper) {
+                            wrapper.write(Type.VAR_INT, 2); // Size
+                            // Write root node
+                            wrapper.write(Type.VAR_INT, 0); // Mark as command
+                            wrapper.write(Type.VAR_INT, 1); // 1 child
+                            wrapper.write(Type.VAR_INT, 1); // Child is at 1
 
-                    // Write arg node
-                    wrapper.write(Type.VAR_INT, 0x02 | 0x04 | 0x10); // Mark as command
-                    wrapper.write(Type.VAR_INT, 0); // No children
-                    // Extra data
-                    wrapper.write(Type.STRING, "args"); // Arg name
-                    wrapper.write(Type.STRING, "brigadier:string");
-                    wrapper.write(Type.VAR_INT, 2); // Greedy
-                    wrapper.write(Type.STRING, "minecraft:ask_server"); // Ask server
+                            // Write arg node
+                            wrapper.write(Type.VAR_INT, 0x02 | 0x04 | 0x10); // Mark as command
+                            wrapper.write(Type.VAR_INT, 0); // No children
+                            // Extra data
+                            wrapper.write(Type.STRING, "args"); // Arg name
+                            wrapper.write(Type.STRING, "brigadier:string");
+                            wrapper.write(Type.VAR_INT, 2); // Greedy
+                            wrapper.write(Type.STRING, "minecraft:ask_server"); // Ask server
 
-                    wrapper.write(Type.VAR_INT, 0); // Root node index
+                            wrapper.write(Type.VAR_INT, 0); // Root node index
+                        }
+                    }).send(Protocol1_13To1_12_2.class);
+
+                    // Send tags packet
+                    w.create(0x55, new ValueCreator() {
+                        @Override
+                        public void write(PacketWrapper wrapper) throws Exception {
+                            wrapper.write(Type.VAR_INT, MappingData.blockTags.size()); // block tags
+                            for (Map.Entry<String, Integer[]> tag : MappingData.blockTags.entrySet()) {
+                                wrapper.write(Type.STRING, tag.getKey());
+                                wrapper.write(Type.VAR_INT_ARRAY, tag.getValue().clone());
+                            }
+                            wrapper.write(Type.VAR_INT, MappingData.itemTags.size()); // item tags
+                            for (Map.Entry<String, Integer[]> tag : MappingData.itemTags.entrySet()) {
+                                wrapper.write(Type.STRING, tag.getKey());
+                                wrapper.write(Type.VAR_INT_ARRAY, tag.getValue().clone());
+                            }
+                            wrapper.write(Type.VAR_INT, MappingData.fluidTags.size()); // fluid tags
+                            for (Map.Entry<String, Integer[]> tag : MappingData.fluidTags.entrySet()) {
+                                wrapper.write(Type.STRING, tag.getKey());
+                                wrapper.write(Type.VAR_INT_ARRAY, tag.getValue().clone());
+                            }
+                        }
+                    }).send(Protocol1_13To1_12_2.class);
                 }
-            }).send(Protocol1_13To1_12_2.class);
+            };
 
-            // Send tags packet
-            w.create(0x55, new ValueCreator() {
-                @Override
-                public void write(PacketWrapper wrapper) throws Exception {
-                    wrapper.write(Type.VAR_INT, MappingData.blockTags.size()); // block tags
-                    for (Map.Entry<String, Integer[]> tag : MappingData.blockTags.entrySet()) {
-                        wrapper.write(Type.STRING, tag.getKey());
-                        wrapper.write(Type.VAR_INT_ARRAY, tag.getValue().clone());
-                    }
-                    wrapper.write(Type.VAR_INT, MappingData.itemTags.size()); // item tags
-                    for (Map.Entry<String, Integer[]> tag : MappingData.itemTags.entrySet()) {
-                        wrapper.write(Type.STRING, tag.getKey());
-                        wrapper.write(Type.VAR_INT_ARRAY, tag.getValue().clone());
-                    }
-                    wrapper.write(Type.VAR_INT, MappingData.fluidTags.size()); // fluid tags
-                    for (Map.Entry<String, Integer[]> tag : MappingData.fluidTags.entrySet()) {
-                        wrapper.write(Type.STRING, tag.getKey());
-                        wrapper.write(Type.VAR_INT_ARRAY, tag.getValue().clone());
-                    }
-                }
-            }).send(Protocol1_13To1_12_2.class);
-        }
-    };
+    // @formatter:off
+    // These are arbitrary rewrite values, it just needs an invalid color code character.
+    protected static EnumMap<ChatColor, Character> SCOREBOARD_TEAM_NAME_REWRITE = new EnumMap<>(ChatColor.class);
+    // @formatter:on
 
     static {
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.BLACK, 'g');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.DARK_BLUE, 'h');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.DARK_GREEN, 'i');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.DARK_AQUA, 'j');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.DARK_RED, 'p');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.DARK_PURPLE, 'q');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.GOLD, 's');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.GRAY, 't');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.DARK_GRAY, 'u');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.BLUE, 'v');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.GREEN, 'w');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.AQUA, 'x');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.RED, 'y');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.LIGHT_PURPLE, 'z');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.YELLOW, '!');
+        SCOREBOARD_TEAM_NAME_REWRITE.put(ChatColor.WHITE, '?');
         MappingData.init();
+        ConnectionData.init();
+        RecipeData.init();
+        BlockIdData.init();
     }
 
     @Override
@@ -108,6 +140,19 @@ public class Protocol1_13To1_12_2 extends Protocol {
         InventoryPackets.register(this);
 
         // Outgoing packets
+
+        registerOutgoing(State.LOGIN, 0x0, 0x0, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.STRING);
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        wrapper.set(Type.STRING, 0, ChatRewriter.processTranslate(wrapper.get(Type.STRING, 0)));
+                    }
+                });
+            }
+        });
 
         registerOutgoing(State.STATUS, 0x00, 0x00, new PacketRemapper() {
             @Override
@@ -148,7 +193,36 @@ public class Protocol1_13To1_12_2 extends Protocol {
             }
         });
 
-        registerOutgoing(State.PLAY, 0xF, 0xE);
+        // Boss bar
+        registerOutgoing(State.PLAY, 0xC, 0xC, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.UUID);
+                map(Type.VAR_INT);
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        int action = wrapper.get(Type.VAR_INT, 0);
+                        if (action == 0 || action == 3) {
+                            wrapper.write(Type.STRING, ChatRewriter.processTranslate(wrapper.read(Type.STRING)));
+                        }
+                    }
+                });
+            }
+        });
+        // Chat message
+        registerOutgoing(State.PLAY, 0xF, 0xE, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.STRING);
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        wrapper.set(Type.STRING, 0, ChatRewriter.processTranslate(wrapper.get(Type.STRING, 0)));
+                    }
+                });
+            }
+        });
         // WorldPackets 0x10 -> 0x0F
 
         // Tab-Complete
@@ -196,13 +270,77 @@ public class Protocol1_13To1_12_2 extends Protocol {
         // New packet 0x11, declare commands
         registerOutgoing(State.PLAY, 0x11, 0x12);
         registerOutgoing(State.PLAY, 0x12, 0x13);
-        registerOutgoing(State.PLAY, 0x13, 0x14);
+        // Open window
+        registerOutgoing(State.PLAY, 0x13, 0x14, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.UNSIGNED_BYTE); // Id
+                map(Type.STRING); // Window type
+                map(Type.STRING); // Title
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        wrapper.set(Type.STRING, 1, ChatRewriter.processTranslate(wrapper.get(Type.STRING, 1)));
+                    }
+                });
+            }
+        });
         // InventoryPackets 0x14 -> 0x15
         // InventoryPackets 0x15 -> 0x16
         // InventoryPackets 0x16 -> 0x17
-        registerOutgoing(State.PLAY, 0x17, 0x18);
+        // Set cooldown
+        registerOutgoing(State.PLAY, 0x17, 0x18, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        int item = wrapper.read(Type.VAR_INT);
+                        int ticks = wrapper.read(Type.VAR_INT);
+                        wrapper.cancel();
+                        if (item == 383) { // Spawn egg
+                            for (int i = 0; i < 44; i++) {
+                                Integer newItem = MappingData.oldToNewItems.get(item << 16 | i);
+                                if (newItem != null) {
+                                    PacketWrapper packet = wrapper.create(0x18);
+                                    packet.write(Type.VAR_INT, newItem);
+                                    packet.write(Type.VAR_INT, ticks);
+                                    packet.send(Protocol1_13To1_12_2.class);
+                                } else {
+                                    break;
+                                }
+                            }
+                        } else {
+                            for (int i = 0; i < 16; i++) {
+                                Integer newItem = MappingData.oldToNewItems.get(item << 4 | i);
+                                if (newItem != null) {
+                                    PacketWrapper packet = wrapper.create(0x18);
+                                    packet.write(Type.VAR_INT, newItem);
+                                    packet.write(Type.VAR_INT, ticks);
+                                    packet.send(Protocol1_13To1_12_2.class);
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
         // WorldPackets 0x18 -> 0x19
-        registerOutgoing(State.PLAY, 0x1A, 0x1B);
+        // Disconnect
+        registerOutgoing(State.PLAY, 0x1A, 0x1B, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.STRING);
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        wrapper.set(Type.STRING, 0, ChatRewriter.processTranslate(wrapper.get(Type.STRING, 0)));
+                    }
+                });
+            }
+        });
         registerOutgoing(State.PLAY, 0x1B, 0x1C);
         // New packet 0x1D - NBT Query
         registerOutgoing(State.PLAY, 0x1C, 0x1E);
@@ -295,30 +433,128 @@ public class Protocol1_13To1_12_2 extends Protocol {
         registerOutgoing(State.PLAY, 0x2B, 0x2D, new PacketRemapper() {
             @Override
             public void registerMap() {
+                map(Type.BYTE);
                 handler(new PacketHandler() {
                     @Override
                     public void handle(PacketWrapper wrapper) throws Exception {
-                        // TODO This packet changed
-                        wrapper.cancel();
+                        wrapper.write(Type.STRING, "viaversion:legacy/" + wrapper.read(Type.VAR_INT));
                     }
                 });
             }
         });
         registerOutgoing(State.PLAY, 0x2C, 0x2E);
-        registerOutgoing(State.PLAY, 0x2D, 0x2F);
+        // Combat event
+        registerOutgoing(State.PLAY, 0x2D, 0x2F, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.VAR_INT); // Event
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        if (wrapper.get(Type.VAR_INT, 0) == 2) { // Entity dead
+                            wrapper.passthrough(Type.VAR_INT); // Player id
+                            wrapper.passthrough(Type.INT); // Entity id
+                            wrapper.write(Type.STRING, ChatRewriter.processTranslate(wrapper.read(Type.STRING)));
+                        }
+                    }
+                });
+            }
+        });
         registerOutgoing(State.PLAY, 0x2E, 0x30);
         // New 0x31 - Face Player
         registerOutgoing(State.PLAY, 0x2F, 0x32);
         registerOutgoing(State.PLAY, 0x30, 0x33);
-        // Recipe
+        // Unlock recipes
         registerOutgoing(State.PLAY, 0x31, 0x34, new PacketRemapper() {
             @Override
             public void registerMap() {
+                map(Type.VAR_INT); // action
+                map(Type.BOOLEAN); // crafting book open
+                map(Type.BOOLEAN); // crafting filter active
+                create(new ValueCreator() {
+                    @Override
+                    public void write(PacketWrapper wrapper) throws Exception {
+                        wrapper.write(Type.BOOLEAN, false); // smelting book open
+                        wrapper.write(Type.BOOLEAN, false); // smelting filter active
+                    }
+                });
                 handler(new PacketHandler() {
                     @Override
                     public void handle(PacketWrapper wrapper) throws Exception {
-                        // TODO: This has changed >.>
-                        wrapper.cancel();
+                        int action = wrapper.get(Type.VAR_INT, 0);
+                        for (int i = 0; i < (action == 0 ? 2 : 1); i++) {
+                            Integer[] ids = wrapper.read(Type.VAR_INT_ARRAY);
+                            String[] stringIds = new String[ids.length];
+                            for (int j = 0; j < ids.length; j++) {
+                                stringIds[j] = "viaversion:legacy/" + ids[j];
+                            }
+                            wrapper.write(Type.STRING_ARRAY, stringIds);
+                        }
+                        if (action == 0) {
+                            wrapper.create(0x54, new ValueCreator() { // Declare recipes
+                                @Override
+                                public void write(PacketWrapper wrapper) throws Exception {
+                                    wrapper.write(Type.VAR_INT, RecipeData.recipes.size());
+                                    for (Map.Entry<String, RecipeData.Recipe> entry : RecipeData.recipes.entrySet()) {
+                                        wrapper.write(Type.STRING, entry.getKey()); // Id
+                                        wrapper.write(Type.STRING, entry.getValue().getType());
+                                        switch (entry.getValue().getType()) {
+                                            case "crafting_shapeless": {
+                                                wrapper.write(Type.STRING, entry.getValue().getGroup());
+                                                wrapper.write(Type.VAR_INT, entry.getValue().getIngredients().length);
+                                                for (Item[] ingredient : entry.getValue().getIngredients()) {
+                                                    Item[] clone = ingredient.clone(); // Clone because array and item is mutable
+                                                    for (int i = 0; i < clone.length; i++) {
+                                                        if (clone[i] == null) continue;
+                                                        clone[i] = new Item(clone[i].getId(), clone[i].getAmount(),
+                                                                (short) 0, null);
+                                                    }
+                                                    wrapper.write(Type.FLAT_ITEM_ARRAY_VAR_INT, clone);
+                                                }
+                                                wrapper.write(Type.FLAT_ITEM, new Item(
+                                                        entry.getValue().getResult().getId(),
+                                                        entry.getValue().getResult().getAmount(), (short) 0, null));
+                                                break;
+                                            }
+                                            case "crafting_shaped": {
+                                                wrapper.write(Type.VAR_INT, entry.getValue().getWidth());
+                                                wrapper.write(Type.VAR_INT, entry.getValue().getHeight());
+                                                wrapper.write(Type.STRING, entry.getValue().getGroup());
+                                                for (Item[] ingredient : entry.getValue().getIngredients()) {
+                                                    Item[] clone = ingredient.clone(); // Clone because array and item is mutable
+                                                    for (int i = 0; i < clone.length; i++) {
+                                                        if (clone[i] == null) continue;
+                                                        clone[i] = new Item(clone[i].getId(), clone[i].getAmount(),
+                                                                (short) 0, null);
+                                                    }
+                                                    wrapper.write(Type.FLAT_ITEM_ARRAY_VAR_INT, clone);
+                                                }
+                                                wrapper.write(Type.FLAT_ITEM, new Item(
+                                                        entry.getValue().getResult().getId(),
+                                                        entry.getValue().getResult().getAmount(), (short) 0, null));
+                                                break;
+                                            }
+                                            case "smelting": {
+                                                wrapper.write(Type.STRING, entry.getValue().getGroup());
+                                                Item[] clone = entry.getValue().getIngredient().clone(); // Clone because array and item is mutable
+                                                for (int i = 0; i < clone.length; i++) {
+                                                    if (clone[i] == null) continue;
+                                                    clone[i] = new Item(clone[i].getId(), clone[i].getAmount(),
+                                                            (short) 0, null);
+                                                }
+                                                wrapper.write(Type.FLAT_ITEM_ARRAY_VAR_INT, clone);
+                                                wrapper.write(Type.FLAT_ITEM, new Item(
+                                                        entry.getValue().getResult().getId(),
+                                                        entry.getValue().getResult().getAmount(), (short) 0, null));
+                                                wrapper.write(Type.FLOAT, entry.getValue().getExperience());
+                                                wrapper.write(Type.VAR_INT, entry.getValue().getCookingTime());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }).send(Protocol1_13To1_12_2.class, true, true);
+                        }
                     }
                 });
             }
@@ -339,6 +575,10 @@ public class Protocol1_13To1_12_2 extends Protocol {
                         ClientWorld clientWorld = wrapper.user().get(ClientWorld.class);
                         int dimensionId = wrapper.get(Type.INT, 0);
                         clientWorld.setEnvironment(dimensionId);
+
+                        if (Via.getConfig().isServersideBlockConnections()) {
+                            ConnectionData.clearBlockStorage(wrapper.user());
+                        }
                     }
                 });
                 handler(SEND_DECLARE_COMMANDS_AND_TAGS);
@@ -424,15 +664,57 @@ public class Protocol1_13To1_12_2 extends Protocol {
                             wrapper.write(Type.STRING, ChatRewriter.legacyTextToJson(prefix)); // Prefix
                             wrapper.write(Type.STRING, ChatRewriter.legacyTextToJson(suffix)); // Suffix
                         }
+
+                        if (action == 0 || action == 3 || action == 4) {
+                            String[] names = wrapper.read(Type.STRING_ARRAY); // Entities
+                            for (int i = 0; i < names.length; i++) {
+                                names[i] = rewriteTeamMemberName(names[i]);
+                            }
+                            wrapper.write(Type.STRING_ARRAY, names);
+                        }
                     }
                 });
 
             }
         });
-        registerOutgoing(State.PLAY, 0x45, 0x48);
+        registerOutgoing(State.PLAY, 0x45, 0x48, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        String displayName = wrapper.read(Type.STRING); // Display Name
+                        displayName = rewriteTeamMemberName(displayName);
+                        wrapper.write(Type.STRING, displayName);
+
+                        byte action = wrapper.read(Type.BYTE);
+                        wrapper.write(Type.BYTE, action);
+                        wrapper.passthrough(Type.STRING); // Objective Name
+                        if (action != 1) {
+                            wrapper.passthrough(Type.VAR_INT); // Value
+                        }
+                    }
+                });
+            }
+        });
         registerOutgoing(State.PLAY, 0x46, 0x49);
         registerOutgoing(State.PLAY, 0x47, 0x4A);
-        registerOutgoing(State.PLAY, 0x48, 0x4B);
+        // Title
+        registerOutgoing(State.PLAY, 0x48, 0x4B, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.VAR_INT); // Action
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        int action = wrapper.get(Type.VAR_INT, 0);
+                        if (action >= 0 && action <= 2) {
+                            wrapper.write(Type.STRING, ChatRewriter.processTranslate(wrapper.read(Type.STRING)));
+                        }
+                    }
+                });
+            }
+        });
         // New 0x4C - Stop Sound
 
         // Sound Effect packet
@@ -450,7 +732,21 @@ public class Protocol1_13To1_12_2 extends Protocol {
                 });
             }
         });
-        registerOutgoing(State.PLAY, 0x4A, 0x4E);
+        // Player list header and footer
+        registerOutgoing(State.PLAY, 0x4A, 0x4E, new PacketRemapper() {
+            @Override
+            public void registerMap() {
+                map(Type.STRING);
+                map(Type.STRING);
+                handler(new PacketHandler() {
+                    @Override
+                    public void handle(PacketWrapper wrapper) throws Exception {
+                        wrapper.set(Type.STRING, 0, ChatRewriter.processTranslate(wrapper.get(Type.STRING, 0)));
+                        wrapper.set(Type.STRING, 1, ChatRewriter.processTranslate(wrapper.get(Type.STRING, 1)));
+                    }
+                });
+            }
+        });
         registerOutgoing(State.PLAY, 0x4B, 0x4F);
         registerOutgoing(State.PLAY, 0x4C, 0x50);
         // Advancements
@@ -472,8 +768,8 @@ public class Protocol1_13To1_12_2 extends Protocol {
 
                             // Display data
                             if (wrapper.passthrough(Type.BOOLEAN)) {
-                                wrapper.passthrough(Type.STRING); // Title
-                                wrapper.passthrough(Type.STRING); // Description
+                                wrapper.write(Type.STRING, ChatRewriter.processTranslate(wrapper.read(Type.STRING))); // Title
+                                wrapper.write(Type.STRING, ChatRewriter.processTranslate(wrapper.read(Type.STRING))); // Description
                                 Item icon = wrapper.read(Type.ITEM);
                                 InventoryPackets.toClient(icon);
                                 wrapper.write(Type.FLAT_ITEM, icon); // Translate item to flat item
@@ -625,11 +921,11 @@ public class Protocol1_13To1_12_2 extends Protocol {
         registerIncoming(State.PLAY, 0x12, 0x16, new PacketRemapper() {
             @Override
             public void registerMap() {
+                map(Type.BYTE); // Window id
                 handler(new PacketHandler() {
                     @Override
                     public void handle(PacketWrapper wrapper) throws Exception {
-                        // TODO: This has changed >.>
-                        wrapper.cancel();
+                        wrapper.write(Type.VAR_INT, Integer.parseInt(wrapper.read(Type.STRING).substring(18)));
                     }
                 });
             }
@@ -650,6 +946,9 @@ public class Protocol1_13To1_12_2 extends Protocol {
                     public void handle(PacketWrapper wrapper) throws Exception {
                         int type = wrapper.get(Type.VAR_INT, 0);
 
+                        if (type == 0) {
+                            wrapper.write(Type.INT, Integer.parseInt(wrapper.read(Type.STRING).substring(18)));
+                        }
                         if (type == 1) {
                             wrapper.passthrough(Type.BOOLEAN); // Crafting Recipe Book Open
                             wrapper.passthrough(Type.BOOLEAN); // Crafting Recipe Filter Active
@@ -836,6 +1135,11 @@ public class Protocol1_13To1_12_2 extends Protocol {
         if (!userConnection.has(ClientWorld.class))
             userConnection.put(new ClientWorld(userConnection));
         userConnection.put(new BlockStorage(userConnection));
+        if (Via.getConfig().isServersideBlockConnections()) {
+            if (Via.getManager().getProviders().get(BlockConnectionProvider.class) instanceof PacketBlockConnectionProvider) {
+                userConnection.put(new BlockConnectionStorage(userConnection));
+            }
+        }
     }
 
     @Override
@@ -875,5 +1179,24 @@ public class Protocol1_13To1_12_2 extends Protocol {
         }
 
         return ChatColor.RESET;
+    }
+
+    protected String rewriteTeamMemberName(String name) {
+        // The Display Name is just colours which overwrites the suffix
+        // It also overwrites for ANY colour in name but most plugins
+        // will just send colour as 'invisible' character
+        if (ChatColor.stripColor(name).length() == 0) {
+            StringBuilder newName = new StringBuilder();
+            for (int i = 1; i < name.length(); i += 2) {
+                char colorChar = name.charAt(i);
+                Character rewrite = SCOREBOARD_TEAM_NAME_REWRITE.get(ChatColor.getByChar(colorChar));
+                if (rewrite == null) {
+                    rewrite = colorChar;
+                }
+                newName.append(ChatColor.COLOR_CHAR).append(rewrite);
+            }
+            name = newName.toString();
+        }
+        return name;
     }
 }

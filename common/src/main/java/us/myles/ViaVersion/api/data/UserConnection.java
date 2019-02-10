@@ -18,6 +18,8 @@ import us.myles.ViaVersion.util.PipelineUtil;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Data
 public class UserConnection {
@@ -36,7 +38,7 @@ public class UserConnection {
     // Used for handling warnings (over time)
     private int secondsObserved = 0;
     private int warnings = 0;
-
+    private ReadWriteLock velocityLock = new ReentrantReadWriteLock();
 
     public UserConnection(Channel channel) {
         this.channel = channel;
@@ -108,7 +110,8 @@ public class UserConnection {
      */
     public ChannelFuture sendRawPacketFuture(final ByteBuf packet) {
         final ChannelHandler handler = channel.pipeline().get(Via.getManager().getInjector().getEncoderName());
-        return channel.pipeline().context(handler).writeAndFlush(packet);
+        ChannelFuture future = channel.pipeline().context(handler).writeAndFlush(packet);
+        return future;
     }
 
     /**
@@ -205,7 +208,7 @@ public class UserConnection {
     /**
      * Sends a raw packet to the server
      *
-     * @param packet Raw packet to be sent
+     * @param packet        Raw packet to be sent
      * @param currentThread If {@code true} executes immediately, {@code false} submits a task to EventLoop
      */
     public void sendRawPacketToServer(final ByteBuf packet, boolean currentThread) {
@@ -218,7 +221,8 @@ public class UserConnection {
         }
         buf.writeBytes(packet);
         packet.release();
-        final ChannelHandlerContext context = PipelineUtil.getPreviousContext(Via.getManager().getInjector().getDecoderName(), getChannel().pipeline());
+        final ChannelHandlerContext context = PipelineUtil
+                .getPreviousContext(Via.getManager().getInjector().getDecoderName(), getChannel().pipeline());
         if (currentThread) {
             if (context != null) {
                 context.fireChannelRead(buf);
@@ -244,5 +248,7 @@ public class UserConnection {
      *
      * @param packet Raw packet to be sent
      */
-    public void sendRawPacketToServer(ByteBuf packet) { sendRawPacketToServer(packet, false); }
+    public void sendRawPacketToServer(ByteBuf packet) {
+        sendRawPacketToServer(packet, false);
+    }
 }

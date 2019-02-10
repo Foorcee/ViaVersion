@@ -266,4 +266,40 @@ public interface ViaVersionConfig {
      * @return True if enabled
      */
     boolean isMinimizeCooldown();
+
+    /**
+     * Enable the serverside blockconnections for 1.13+ clients
+     *
+     * @return True if enabled
+     */
+    boolean isServersideBlockConnections();
+
+    /**
+     * Get the type of block-connection provider which should be used
+     *
+     * @return String world for world-level or packet for packet-level
+     */
+    String getBlockConnectionMethod();
+
+    /**
+     * When activated, only the most important blocks are saved in the BlockStorage.
+     *
+     * @return True if enabled
+     */
+    boolean isReduceBlockStorageMemory();
+
+    /**
+     * When activated with serverside-blockconnections, flower parts with blocks above will be sent as stems.
+     * Useful for lobbyservers where users can't build and those stems are used decoratively.
+     *
+     * @return True if enabled
+     */
+    boolean isStemWhenBlockAbove();
+
+    /**
+     * When activated, the 1-layer snow will be sent as 2-layer snow to 1.13+ clients to have collision.
+     *
+     * @return True if enabled
+     */
+    boolean isSnowCollisionFix();
 }

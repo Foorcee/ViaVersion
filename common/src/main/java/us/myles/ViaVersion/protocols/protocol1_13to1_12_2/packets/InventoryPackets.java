@@ -1,5 +1,6 @@
 package us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets;
 
+import com.github.steveice10.opennbt.conversion.ConverterRegistry;
 import com.github.steveice10.opennbt.tag.builtin.*;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
@@ -13,6 +14,7 @@ import us.myles.ViaVersion.api.remapper.PacketRemapper;
 import us.myles.ViaVersion.api.type.Type;
 import us.myles.ViaVersion.packets.State;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.ChatRewriter;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.BlockIdData;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.MappingData;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.SoundSource;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.SpawnEggRewriter;
@@ -373,6 +375,44 @@ public class InventoryPackets {
                 tag.remove("StoredEnchantments");
                 tag.put(newStoredEnch);
             }
+            if (tag.get("CanPlaceOn") instanceof ListTag) {
+                ListTag old = tag.get("CanPlaceOn");
+                ListTag newCanPlaceOn = new ListTag("CanPlaceOn", StringTag.class);
+                tag.put(ConverterRegistry.convertToTag(NBT_TAG_NAME + "|CanPlaceOn", ConverterRegistry.convertToValue(old))); // There will be data losing
+                for (Tag oldTag : old) {
+                    Object value = oldTag.getValue();
+                    String[] newValues = BlockIdData.blockIdMapping.get(value instanceof String
+                            ? ((String) value).replace("minecraft:", "")
+                            : null);
+                    if (newValues != null) {
+                        for (String newValue : newValues) {
+                            newCanPlaceOn.add(new StringTag("", newValue));
+                        }
+                    } else {
+                        newCanPlaceOn.add(oldTag);
+                    }
+                }
+                tag.put(newCanPlaceOn);
+            }
+            if (tag.get("CanDestroy") instanceof ListTag) {
+                ListTag old = tag.get("CanDestroy");
+                ListTag newCanDestroy = new ListTag("CanDestroy", StringTag.class);
+                tag.put(ConverterRegistry.convertToTag(NBT_TAG_NAME + "|CanDestroy", ConverterRegistry.convertToValue(old))); // There will be data losing
+                for (Tag oldTag : old) {
+                    Object value = oldTag.getValue();
+                    String[] newValues = BlockIdData.blockIdMapping.get(value instanceof String
+                            ? ((String) value).replace("minecraft:", "")
+                            : null);
+                    if (newValues != null) {
+                        for (String newValue : newValues) {
+                            newCanDestroy.add(new StringTag("", newValue));
+                        }
+                    } else {
+                        newCanDestroy.add(oldTag);
+                    }
+                }
+                tag.put(newCanDestroy);
+            }
             // Handle SpawnEggs
             if (item.getId() == 383) {
                 if (tag.get("EntityTag") instanceof CompoundTag) {
@@ -447,7 +487,7 @@ public class InventoryPackets {
             case "WDL|REQUEST":
                 return "wdl:request";
             default:
-                return old.matches("[0-9a-z_-]+:[0-9a-z_/.-]+") // Identifier regex
+                return old.matches("([0-9a-z_-]*:)?[0-9a-z_/.-]*") // Identifier regex
                         ? old
                         : "viaversion:legacy/" + BaseEncoding.base32().lowerCase().withPadChar('-').encode(
                         old.getBytes(StandardCharsets.UTF_8));
@@ -538,7 +578,6 @@ public class InventoryPackets {
                     }
                 }
             }
-
             // Display Name now uses JSON
             if (tag.get("display") instanceof CompoundTag) {
                 CompoundTag display = tag.get("display");
@@ -576,7 +615,7 @@ public class InventoryPackets {
                         ench.add(enchEntry);
                     }
                 }
-                tag.remove("Enchantment");
+                tag.remove("Enchantments");
                 tag.put(ench);
             }
             if (tag.get("StoredEnchantments") instanceof ListTag) {
@@ -602,6 +641,54 @@ public class InventoryPackets {
                 }
                 tag.remove("StoredEnchantments");
                 tag.put(newStoredEnch);
+            }
+            if (tag.get(NBT_TAG_NAME + "|CanPlaceOn") instanceof ListTag) {
+                tag.put(ConverterRegistry.convertToTag(
+                        "CanPlaceOn",
+                        ConverterRegistry.convertToValue(tag.get(NBT_TAG_NAME + "|CanPlaceOn"))
+                ));
+                tag.remove(NBT_TAG_NAME + "|CanPlaceOn");
+            } else if (tag.get("CanPlaceOn") instanceof ListTag) {
+                ListTag old = tag.get("CanPlaceOn");
+                ListTag newCanPlaceOn = new ListTag("CanPlaceOn", StringTag.class);
+                for (Tag oldTag : old) {
+                    Object value = oldTag.getValue();
+                    String[] newValues = BlockIdData.fallbackReverseMapping.get(value instanceof String
+                            ? ((String) value).replace("minecraft:", "")
+                            : null);
+                    if (newValues != null) {
+                        for (String newValue : newValues) {
+                            newCanPlaceOn.add(new StringTag("", newValue));
+                        }
+                    } else {
+                        newCanPlaceOn.add(oldTag);
+                    }
+                }
+                tag.put(newCanPlaceOn);
+            }
+            if (tag.get(NBT_TAG_NAME + "|CanDestroy") instanceof ListTag) {
+                tag.put(ConverterRegistry.convertToTag(
+                        "CanDestroy",
+                        ConverterRegistry.convertToValue(tag.get(NBT_TAG_NAME + "|CanDestroy"))
+                ));
+                tag.remove(NBT_TAG_NAME + "|CanDestroy");
+            } else if (tag.get("CanDestroy") instanceof ListTag) {
+                ListTag old = tag.get("CanDestroy");
+                ListTag newCanDestroy = new ListTag("CanDestroy", StringTag.class);
+                for (Tag oldTag : old) {
+                    Object value = oldTag.getValue();
+                    String[] newValues = BlockIdData.fallbackReverseMapping.get(value instanceof String
+                            ? ((String) value).replace("minecraft:", "")
+                            : null);
+                    if (newValues != null) {
+                        for (String newValue : newValues) {
+                            newCanDestroy.add(new StringTag("", newValue));
+                        }
+                    } else {
+                        newCanDestroy.add(oldTag);
+                    }
+                }
+                tag.put(newCanDestroy);
             }
         }
     }

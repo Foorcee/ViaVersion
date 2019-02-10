@@ -2,15 +2,19 @@ package us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.google.common.io.CharStreams;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
 import us.myles.ViaVersion.api.Via;
 import us.myles.ViaVersion.util.GsonUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +25,8 @@ public class MappingData {
     public static Map<String, Integer[]> itemTags = new HashMap<>();
     public static Map<String, Integer[]> fluidTags = new HashMap<>();
     public static BiMap<Short, String> oldEnchantmentsIds = HashBiMap.create();
+    public static Map<String, String> translateMapping = new HashMap<>();
+    public static Map<String, String> mojangTranslation = new HashMap<>();
     public static EnchantmentMappings enchantmentMappings;
     public static SoundMappings soundMappings;
     public static BlockMappings blockMappings;
@@ -42,6 +48,38 @@ public class MappingData {
         enchantmentMappings = new EnchantmentMappingByteArray(mapping1_12.getAsJsonObject("enchantments"), mapping1_13.getAsJsonObject("enchantments"));
         Via.getPlatform().getLogger().info("Loading sound mapping...");
         soundMappings = new SoundMappingShortArray(mapping1_12.getAsJsonArray("sounds"), mapping1_13.getAsJsonArray("sounds"));
+        Via.getPlatform().getLogger().info("Loading translation mappping");
+        translateMapping = new HashMap<>();
+        Map<String, String> translateData = GsonUtil.getGson().fromJson(
+                new InputStreamReader(
+                        MappingData.class.getClassLoader()
+                                .getResourceAsStream("assets/viaversion/data/mapping-lang-1.12-1.13.json")
+                ),
+                (new TypeToken<Map<String, String>>(){}).getType());
+        try {
+            String[] lines;
+            try (Reader reader = new InputStreamReader(MappingData.class.getClassLoader()
+                    .getResourceAsStream("mojang-translations/en_US.properties"), StandardCharsets.UTF_8)) {
+                lines = CharStreams.toString(reader).split("\n");
+            }
+            for (String line : lines) {
+                if (line.isEmpty()) continue;
+                String[] keyAndTranslation = line.split("=", 2);
+                if (keyAndTranslation.length != 2) continue;
+                String key = keyAndTranslation[0];
+                String translation = keyAndTranslation[1].replaceAll("%(\\d\\$)?d", "%$1s");
+                if (!translateData.containsKey(key)) {
+                    translateMapping.put(key, translation);
+                } else {
+                    String dataValue = translateData.get(keyAndTranslation[0]);
+                    if (dataValue != null) {
+                        translateMapping.put(key, dataValue);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static JsonObject loadData(String name) {
@@ -157,6 +195,10 @@ public class MappingData {
         private BlockMappingsShortArray(JsonObject mapping1_12, JsonObject mapping1_13) {
             Arrays.fill(oldToNew, (short) -1);
             mapIdentifiers(oldToNew, mapping1_12, mapping1_13);
+            // Map minecraft:snow[layers=1] of 1.12 to minecraft:snow[layers=2] in 1.13
+            if (Via.getConfig().isSnowCollisionFix()) {
+                oldToNew[1248] = 3416;
+            }
         }
 
         @Override
