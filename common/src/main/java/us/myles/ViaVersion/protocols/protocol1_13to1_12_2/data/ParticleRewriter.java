@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import us.myles.ViaVersion.api.Via;
 import us.myles.ViaVersion.api.minecraft.item.Item;
 import us.myles.ViaVersion.api.type.Type;
+import us.myles.ViaVersion.api.type.types.Particle;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.InventoryPackets;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.WorldPackets;
 
@@ -127,9 +128,9 @@ public class ParticleRewriter {
             public Particle handler(Particle particle, Integer[] data) {
                 Item item;
                 if (data.length == 1)
-                    item = new Item(data[0].shortValue(), (byte) 1, (short) 0, null);
+                    item = new Item(data[0], (byte) 1, (short) 0, null);
                 else if (data.length == 2)
-                    item = new Item(data[0].shortValue(), (byte) 1, data[1].shortValue(), null);
+                    item = new Item(data[0], (byte) 1, data[1].shortValue(), null);
                 else
                     return particle;
 

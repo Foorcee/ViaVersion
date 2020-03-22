@@ -27,6 +27,7 @@ public class MappingData {
     public static final BiMap<Short, String> oldEnchantmentsIds = HashBiMap.create();
     public static final Map<String, String> translateMapping = new HashMap<>();
     public static final Map<String, String> mojangTranslation = new HashMap<>();
+    public static final BiMap<String, String> channelMappings = HashBiMap.create(); // 1.12->1.13
     public static Mappings enchantmentMappings;
     public static Mappings soundMappings;
     public static Mappings blockMappings;
@@ -48,6 +49,21 @@ public class MappingData {
         enchantmentMappings = new Mappings(72, mapping1_12.getAsJsonObject("enchantments"), mapping1_13.getAsJsonObject("enchantments"));
         Via.getPlatform().getLogger().info("Loading 1.12.2 -> 1.13 sound mapping...");
         soundMappings = new Mappings(662, mapping1_12.getAsJsonArray("sounds"), mapping1_13.getAsJsonArray("sounds"));
+        Via.getPlatform().getLogger().info("Loading 1.12.2 -> 1.13 plugin channel mappings...");
+
+        JsonObject object = MappingDataLoader.loadFromDataDir("channelmappings-1.13.json");
+        if (object != null) {
+            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+                String oldChannel = entry.getKey();
+                String newChannel = entry.getValue().getAsString();
+                if (!isValid1_13Channel(newChannel)) {
+                    Via.getPlatform().getLogger().warning("Channel '" + newChannel + "' is not a valid 1.13 plugin channel, please check your configuration!");
+                    continue;
+                }
+                channelMappings.put(oldChannel, newChannel);
+            }
+        }
+
         Via.getPlatform().getLogger().info("Loading translation mappping");
         Map<String, String> translateData = GsonUtil.getGson().fromJson(
                 new InputStreamReader(MappingData.class.getClassLoader().getResourceAsStream("assets/viaversion/data/mapping-lang-1.12-1.13.json")),
@@ -61,14 +77,16 @@ public class MappingData {
             }
             for (String line : lines) {
                 if (line.isEmpty()) continue;
+
                 String[] keyAndTranslation = line.split("=", 2);
                 if (keyAndTranslation.length != 2) continue;
+
                 String key = keyAndTranslation[0];
-                String translation = keyAndTranslation[1].replaceAll("%(\\d\\$)?d", "%$1s");
                 if (!translateData.containsKey(key)) {
-                    translateMapping.put(key, translation);
+                    String translation = keyAndTranslation[1].replaceAll("%(\\d\\$)?d", "%$1s");
+                    mojangTranslation.put(key, translation);
                 } else {
-                    String dataValue = translateData.get(keyAndTranslation[0]);
+                    String dataValue = translateData.get(key);
                     if (dataValue != null) {
                         translateMapping.put(key, dataValue);
                     }
@@ -77,6 +95,22 @@ public class MappingData {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static String validateNewChannel(String newId) {
+        if (!isValid1_13Channel(newId)) {
+            return null; // Not valid
+        }
+        int separatorIndex = newId.indexOf(':');
+        // Vanilla parses ``:`` and ```` as ``minecraft:`` (also ensure there's enough space)
+        if ((separatorIndex == -1 || separatorIndex == 0) && newId.length() <= 10) {
+            newId = "minecraft:" + newId;
+        }
+        return newId;
+    }
+
+    public static boolean isValid1_13Channel(String channelId) {
+        return channelId.matches("([0-9a-z_.-]+):([0-9a-z_/.-]+)");
     }
 
     private static void loadTags(Map<String, Integer[]> output, JsonObject newTags) {
@@ -107,12 +141,14 @@ public class MappingData {
             }
 
             // Remap infested blocks, as they are instantly breakabale in 1.13+ and can't be broken by those clients on older servers
-            oldToNew[1552] = 1; // stone
-            oldToNew[1553] = 14; // cobblestone
-            oldToNew[1554] = 3983; // stone bricks
-            oldToNew[1555] = 3984; // mossy stone bricks
-            oldToNew[1556] = 3985; // cracked stone bricks
-            oldToNew[1557] = 3986; // chiseled stone bricks
+            if (Via.getConfig().isInfestedBlocksFix()) {
+                oldToNew[1552] = 1; // stone
+                oldToNew[1553] = 14; // cobblestone
+                oldToNew[1554] = 3983; // stone bricks
+                oldToNew[1555] = 3984; // mossy stone bricks
+                oldToNew[1556] = 3985; // cracked stone bricks
+                oldToNew[1557] = 3986; // chiseled stone bricks
+            }
         }
     }
 }

@@ -23,6 +23,7 @@ public class Protocol1_15To1_14_4 extends Protocol {
     protected void registerPackets() {
         new MetadataRewriter1_15To1_14_4(this);
 
+        MappingData.init();
         EntityPackets.register(this);
         PlayerPackets.register(this);
         WorldPackets.register(this);
@@ -57,7 +58,7 @@ public class Protocol1_15To1_14_4 extends Protocol {
         });
 
         // Edit Book
-        registerIncoming(State.PLAY, 0x0C, 0x0D, new PacketRemapper() {
+        registerIncoming(State.PLAY, 0x0C, 0x0C, new PacketRemapper() {
             @Override
             public void registerMap() {
                 handler(new PacketHandler() {
@@ -160,6 +161,7 @@ public class Protocol1_15To1_14_4 extends Protocol {
         registerOutgoing(State.PLAY, 0x08, 0x09);
         registerOutgoing(State.PLAY, 0x09, 0x0A);
 
+        registerOutgoing(State.PLAY, 0x0C, 0x0D);
         registerOutgoing(State.PLAY, 0x0D, 0x0E);
         registerOutgoing(State.PLAY, 0x0E, 0x0F);
         registerOutgoing(State.PLAY, 0x10, 0x11);
@@ -169,7 +171,6 @@ public class Protocol1_15To1_14_4 extends Protocol {
 
         registerOutgoing(State.PLAY, 0x15, 0x16);
 
-        registerOutgoing(State.PLAY, 0x17, 0x18);
         registerOutgoing(State.PLAY, 0x18, 0x19);
         registerOutgoing(State.PLAY, 0x19, 0x1A);
         registerOutgoing(State.PLAY, 0x1A, 0x1B);
@@ -200,7 +201,7 @@ public class Protocol1_15To1_14_4 extends Protocol {
         registerOutgoing(State.PLAY, 0x34, 0x35);
         registerOutgoing(State.PLAY, 0x35, 0x36);
         registerOutgoing(State.PLAY, 0x36, 0x37);
-        registerOutgoing(State.PLAY, 0x37, 0x38);
+
         registerOutgoing(State.PLAY, 0x38, 0x39);
         registerOutgoing(State.PLAY, 0x39, 0x3A);
         registerOutgoing(State.PLAY, 0x3B, 0x3C);
@@ -234,18 +235,6 @@ public class Protocol1_15To1_14_4 extends Protocol {
 
         registerOutgoing(State.PLAY, 0x58, 0x59);
         registerOutgoing(State.PLAY, 0x59, 0x5A);
-
-
-        registerOutgoing(State.PLAY, 0x5C, 0x08);
-    }
-
-    public static int getNewSoundId(int id) {
-        int newId = MappingData.soundMappings.getNewId(id);
-        if (newId == -1) {
-            Via.getPlatform().getLogger().warning("Missing 1.15 sound for 1.14.4 sound " + id);
-            return 0;
-        }
-        return newId;
     }
 
     public static int getNewBlockStateId(int id) {

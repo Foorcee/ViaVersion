@@ -100,7 +100,7 @@ public class InventoryPackets {
                                 flags |= 1;
                                 Optional<SoundSource> finalSource = SoundSource.findBySource(originalSource);
                                 if (!finalSource.isPresent()) {
-                                    if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+                                    if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                                         Via.getPlatform().getLogger().info("Could not handle unknown sound source " + originalSource + " falling back to default: master");
                                     }
                                     finalSource = Optional.of(SoundSource.MASTER);
@@ -147,7 +147,7 @@ public class InventoryPackets {
                             String old = channel;
                             channel = getNewPluginChannelId(channel);
                             if (channel == null) {
-                                if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+                                if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                                     Via.getPlatform().getLogger().warning("Ignoring outgoing plugin message with channel: " + old);
                                 }
                                 wrapper.cancel();
@@ -159,7 +159,7 @@ public class InventoryPackets {
                                     String rewritten = getNewPluginChannelId(channels[i]);
                                     if (rewritten != null) {
                                         rewrittenChannels.add(rewritten);
-                                    } else if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+                                    } else if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                                         Via.getPlatform().getLogger().warning("Ignoring plugin channel in outgoing REGISTER: " + channels[i]);
                                     }
                                 }
@@ -218,7 +218,7 @@ public class InventoryPackets {
                         String old = channel;
                         channel = getOldPluginChannelId(channel);
                         if (channel == null) {
-                            if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+                            if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                                 Via.getPlatform().getLogger().warning("Ignoring incoming plugin message with channel: " + old);
                             }
                             wrapper.cancel();
@@ -230,7 +230,7 @@ public class InventoryPackets {
                                 String rewritten = getOldPluginChannelId(channels[i]);
                                 if (rewritten != null) {
                                     rewrittenChannels.add(rewritten);
-                                } else if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+                                } else if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                                     Via.getPlatform().getLogger().warning("Ignoring plugin channel in incoming REGISTER: " + channels[i]);
                                 }
                             }
@@ -431,7 +431,7 @@ public class InventoryPackets {
             } else if (MappingData.oldToNewItems.containsKey(rawId & ~0xF)) {
                 rawId &= ~0xF; // Remove data
             } else {
-                if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+                if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                     Via.getPlatform().getLogger().warning("Failed to get 1.13 item for " + item.getIdentifier());
                 }
                 rawId = 16; // Stone
@@ -443,6 +443,7 @@ public class InventoryPackets {
     }
 
     public static String getNewPluginChannelId(String old) {
+        // Default channels that should not be modifiable
         switch (old) {
             case "MC|TrList":
                 return "minecraft:trader_list";
@@ -460,21 +461,12 @@ public class InventoryPackets {
                 return "minecraft:unregister";
             case "BungeeCord":
                 return "bungeecord:main";
-            case "WDL|INIT":
-                return "wdl:init";
-            case "WDL|CONTROL":
-                return "wdl:control";
-            case "WDL|REQUEST":
-                return "wdl:request";
             case "bungeecord:main":
                 return null;
-            case "FML|MP":
-                return "fml:mp";
-            case "FML|HS":
-                return "fml:hs";
             default:
-                return old.matches("([0-9a-z_.-]+):([0-9a-z_/.-]+)") // Identifier regex
-                        ? old : null;
+                String mappedChannel = MappingData.channelMappings.get(old);
+                if (mappedChannel != null) return mappedChannel;
+                return MappingData.isValid1_13Channel(old) ? old : null;
         }
     }
 
@@ -518,7 +510,7 @@ public class InventoryPackets {
         }
 
         if (rawId == null) {
-            if (!Via.getConfig().isSuppress1_13ConversionErrors() || Via.getManager().isDebug()) {
+            if (!Via.getConfig().isSuppressConversionWarnings() || Via.getManager().isDebug()) {
                 Via.getPlatform().getLogger().warning("Failed to get 1.12 item for " + item.getIdentifier());
             }
             rawId = 0x10000; // Stone
@@ -682,14 +674,10 @@ public class InventoryPackets {
     }
 
     public static String getOldPluginChannelId(String newId) {
-        if (!newId.matches("([0-9a-z_.-]+):([0-9a-z_/.-]+)")) {
-            return null; // Not valid
-        }
-        int separatorIndex = newId.indexOf(':');
-        // Vanilla parses ``:`` and ```` as ``minecraft:`` (also ensure there's enough space)
-        if ((separatorIndex == -1 || separatorIndex == 0) && newId.length() <= 10) {
-            newId = "minecraft:" + newId;
-        }
+        newId = MappingData.validateNewChannel(newId);
+        if (newId == null) return null;
+
+        // Default channels that should not be modifiable
         switch (newId) {
             case "minecraft:trader_list":
                 return "MC|TrList";
@@ -707,17 +695,9 @@ public class InventoryPackets {
                 return "MC|Brand";
             case "bungeecord:main":
                 return "BungeeCord";
-            case "wdl:init":
-                return "WDL|INIT";
-            case "wdl:control":
-                return "WDL|CONTROL";
-            case "wdl:request":
-                return "WDL|REQUEST";
-            case "fml:hs":
-                return "FML|HS";
-            case "fml:mp":
-                return "FML:MP";
             default:
+                String mappedChannel = MappingData.channelMappings.inverse().get(newId);
+                if (mappedChannel != null) return mappedChannel;
                 return newId.length() > 20 ? newId.substring(0, 20) : newId;
         }
     }

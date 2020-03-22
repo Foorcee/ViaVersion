@@ -38,7 +38,7 @@ import java.util.logging.Logger;
 @Plugin(id = "viaversion",
         name = "ViaVersion",
         version = VersionInfo.VERSION,
-        authors = {"_MylesC", "Matsv"},
+        authors = {"_MylesC", "creeper123123321", "Gerrygames", "KennyTV", "Matsv"},
         description = "Allow newer Minecraft versions to connect to an older server version."
 )
 public class SpongePlugin implements ViaPlatform {
@@ -193,6 +193,11 @@ public class SpongePlugin implements ViaPlatform {
     @Override
     public ConfigurationProvider getConfigurationProvider() {
         return conf;
+    }
+
+    @Override
+    public File getDataFolder() {
+        return defaultConfig.getParentFile();
     }
 
     @Override

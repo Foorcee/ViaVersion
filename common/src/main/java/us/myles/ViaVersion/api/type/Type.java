@@ -2,7 +2,6 @@ package us.myles.ViaVersion.api.type;
 
 
 import com.github.steveice10.opennbt.tag.builtin.CompoundTag;
-import lombok.Getter;
 import us.myles.ViaVersion.api.minecraft.*;
 import us.myles.ViaVersion.api.minecraft.item.Item;
 import us.myles.ViaVersion.api.type.types.*;
@@ -11,7 +10,6 @@ import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.Particle;
 
 import java.util.UUID;
 
-@Getter
 public abstract class Type<T> implements ByteBufReader<T>, ByteBufWriter<T> {
     /* Defined Types */
     public static final Type<Byte> BYTE = new ByteType();
@@ -84,6 +82,7 @@ public abstract class Type<T> implements ByteBufReader<T>, ByteBufWriter<T> {
     public static final Type<String[]> STRING_ARRAY = new ArrayType<>(Type.STRING);
 
     public static final Type<UUID> UUID = new UUIDType();
+    public static final Type<UUID> UUID_INT_ARRAY = new UUIDIntArrayType();
     public static final Type<UUID[]> UUID_ARRAY = new ArrayType<>(Type.UUID);
     /* Variable Types */
     public static final Type<Integer> VAR_INT = new VarIntType();
@@ -147,12 +146,20 @@ public abstract class Type<T> implements ByteBufReader<T>, ByteBufWriter<T> {
         this.typeName = typeName;
     }
 
+    public Class<? super T> getOutputClass() {
+        return outputClass;
+    }
+
+    public String getTypeName() {
+        return typeName;
+    }
+
     public Class<? extends Type> getBaseClass() {
         return this.getClass();
     }
 
     @Override
     public String toString() {
-        return "Type|" + getTypeName();
+        return "Type|" + typeName;
     }
 }

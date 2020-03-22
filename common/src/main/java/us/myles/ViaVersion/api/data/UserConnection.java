@@ -6,7 +6,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import lombok.Data;
-import lombok.NonNull;
 import net.md_5.bungee.api.ChatColor;
 import us.myles.ViaVersion.api.PacketWrapper;
 import us.myles.ViaVersion.api.Via;
@@ -23,7 +22,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Data
 public class UserConnection {
-    @NonNull
     private final Channel channel;
     Map<Class, StoredObject> storedObjects = new ConcurrentHashMap<>();
     private boolean active = true;
@@ -93,12 +91,7 @@ public class UserConnection {
         if (currentThread) {
             channel.pipeline().context(handler).writeAndFlush(packet);
         } else {
-            channel.eventLoop().submit(new Runnable() {
-                @Override
-                public void run() {
-                    channel.pipeline().context(handler).writeAndFlush(packet);
-                }
-            });
+            channel.eventLoop().submit(() -> channel.pipeline().context(handler).writeAndFlush(packet));
         }
     }
 
@@ -110,8 +103,7 @@ public class UserConnection {
      */
     public ChannelFuture sendRawPacketFuture(final ByteBuf packet) {
         final ChannelHandler handler = channel.pipeline().get(Via.getManager().getInjector().getEncoderName());
-        ChannelFuture future = channel.pipeline().context(handler).writeAndFlush(packet);
-        return future;
+        return channel.pipeline().context(handler).writeAndFlush(packet);
     }
 
     /**
@@ -155,26 +147,26 @@ public class UserConnection {
         ViaVersionConfig conf = Via.getConfig();
         // Max PPS Checker
         if (conf.getMaxPPS() > 0) {
-            if (getPacketsPerSecond() >= conf.getMaxPPS()) {
-                disconnect(conf.getMaxPPSKickMessage().replace("%pps", Long.toString(getPacketsPerSecond())));
+            if (packetsPerSecond >= conf.getMaxPPS()) {
+                disconnect(conf.getMaxPPSKickMessage().replace("%pps", Long.toString(packetsPerSecond)));
                 return true; // don't send current packet
             }
         }
 
         // Tracking PPS Checker
         if (conf.getMaxWarnings() > 0 && conf.getTrackingPeriod() > 0) {
-            if (getSecondsObserved() > conf.getTrackingPeriod()) {
+            if (secondsObserved > conf.getTrackingPeriod()) {
                 // Reset
                 setWarnings(0);
                 setSecondsObserved(1);
             } else {
-                setSecondsObserved(getSecondsObserved() + 1);
-                if (getPacketsPerSecond() >= conf.getWarningPPS()) {
-                    setWarnings(getWarnings() + 1);
+                setSecondsObserved(secondsObserved + 1);
+                if (packetsPerSecond >= conf.getWarningPPS()) {
+                    setWarnings(warnings + 1);
                 }
 
-                if (getWarnings() >= conf.getMaxWarnings()) {
-                    disconnect(conf.getMaxWarningsKickMessage().replace("%pps", Long.toString(getPacketsPerSecond())));
+                if (warnings >= conf.getMaxWarnings()) {
+                    disconnect(conf.getMaxWarningsKickMessage().replace("%pps", Long.toString(packetsPerSecond)));
                     return true; // don't send current packet
                 }
             }
@@ -188,21 +180,17 @@ public class UserConnection {
      * @param reason The reason to use, not used if player is not active.
      */
     public void disconnect(final String reason) {
-        if (!getChannel().isOpen()) return;
+        if (!channel.isOpen()) return;
         if (pendingDisconnect) return;
         pendingDisconnect = true;
         if (get(ProtocolInfo.class).getUuid() != null) {
             final UUID uuid = get(ProtocolInfo.class).getUuid();
-            Via.getPlatform().runSync(new Runnable() {
-                @Override
-                public void run() {
-                    if (!Via.getPlatform().kickPlayer(uuid, ChatColor.translateAlternateColorCodes('&', reason))) {
-                        getChannel().close(); // =)
-                    }
+            Via.getPlatform().runSync(() -> {
+                if (!Via.getPlatform().kickPlayer(uuid, ChatColor.translateAlternateColorCodes('&', reason))) {
+                    channel.close(); // =)
                 }
             });
         }
-
     }
 
     /**
@@ -222,23 +210,20 @@ public class UserConnection {
             }
             buf.writeBytes(packet);
             final ChannelHandlerContext context = PipelineUtil
-                    .getPreviousContext(Via.getManager().getInjector().getDecoderName(), getChannel().pipeline());
+                    .getPreviousContext(Via.getManager().getInjector().getDecoderName(), channel.pipeline());
             if (currentThread) {
                 if (context != null) {
                     context.fireChannelRead(buf);
                 } else {
-                    getChannel().pipeline().fireChannelRead(buf);
+                    channel.pipeline().fireChannelRead(buf);
                 }
             } else {
                 try {
-                    channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (context != null) {
-                                context.fireChannelRead(buf);
-                            } else {
-                                getChannel().pipeline().fireChannelRead(buf);
-                            }
+                    channel.eventLoop().submit(() -> {
+                        if (context != null) {
+                            context.fireChannelRead(buf);
+                        } else {
+                            channel.pipeline().fireChannelRead(buf);
                         }
                     });
                 } catch (Throwable t) {

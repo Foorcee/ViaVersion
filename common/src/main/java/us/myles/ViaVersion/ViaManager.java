@@ -3,6 +3,7 @@ package us.myles.ViaVersion;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import us.myles.ViaVersion.api.Via;
 import us.myles.ViaVersion.api.data.UserConnection;
 import us.myles.ViaVersion.api.platform.ViaInjector;
 import us.myles.ViaVersion.api.platform.ViaPlatform;
@@ -12,19 +13,19 @@ import us.myles.ViaVersion.api.protocol.ProtocolRegistry;
 import us.myles.ViaVersion.api.protocol.ProtocolVersion;
 import us.myles.ViaVersion.commands.ViaCommandHandler;
 import us.myles.ViaVersion.protocols.base.ProtocolInfo;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.TabCompleteThread;
+import us.myles.ViaVersion.protocols.protocol1_9to1_8.ViaIdleThread;
 import us.myles.ViaVersion.update.UpdateUtil;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Getter
 public class ViaManager {
     private final Map<UUID, UserConnection> portedPlayers = new ConcurrentHashMap<>();
     private final ViaPlatform platform;
     private final ViaProviders providers = new ViaProviders();
-    @Setter
-    private boolean debug = false;
+    private boolean debug;
     // Internals
     private final ViaInjector injector;
     private final ViaCommandHandler commandHandler;
@@ -83,6 +84,17 @@ public class ViaManager {
 
         // Load Platform
         loader.load();
+        // Common tasks
+        if (ProtocolRegistry.SERVER_PROTOCOL < ProtocolVersion.v1_9.getId()) {
+            if (Via.getConfig().isSimulatePlayerTick()) {
+                Via.getPlatform().runRepeatingSync(new ViaIdleThread(), 1L);
+            }
+        }
+        if (ProtocolRegistry.SERVER_PROTOCOL < ProtocolVersion.v1_13.getId()) {
+            if (Via.getConfig().get1_13TabCompleteDelay() > 0) {
+                Via.getPlatform().runRepeatingSync(new TabCompleteThread(), 1L);
+            }
+        }
 
         // Refresh Versions
         ProtocolRegistry.refreshVersions();
@@ -114,4 +126,35 @@ public class ViaManager {
         return portedPlayers.get(playerUUID);
     }
 
+    public Map<UUID, UserConnection> getPortedPlayers() {
+        return portedPlayers;
+    }
+
+    public ViaPlatform getPlatform() {
+        return platform;
+    }
+
+    public ViaProviders getProviders() {
+        return providers;
+    }
+
+    public boolean isDebug() {
+        return debug;
+    }
+
+    public void setDebug(boolean debug) {
+        this.debug = debug;
+    }
+
+    public ViaInjector getInjector() {
+        return injector;
+    }
+
+    public ViaCommandHandler getCommandHandler() {
+        return commandHandler;
+    }
+
+    public ViaPlatformLoader getLoader() {
+        return loader;
+    }
 }

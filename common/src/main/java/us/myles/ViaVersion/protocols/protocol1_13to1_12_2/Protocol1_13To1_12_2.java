@@ -23,6 +23,7 @@ import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.blockconnections.provi
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.BlockIdData;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.MappingData;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.RecipeData;
+import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.StatisticMappings;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.metadata.MetadataRewriter1_13To1_12_2;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.EntityPackets;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.packets.InventoryPackets;
@@ -33,7 +34,6 @@ import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.BlockConnectio
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.BlockStorage;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.EntityTracker1_13;
 import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.storage.TabCompleteTracker;
-import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.types.Particle1_13Type;
 import us.myles.ViaVersion.protocols.protocol1_9_3to1_9_1_2.storage.ClientWorld;
 import us.myles.ViaVersion.util.GsonUtil;
 
@@ -41,15 +41,14 @@ import java.util.EnumMap;
 import java.util.Map;
 
 public class Protocol1_13To1_12_2 extends Protocol {
-    public static final Particle1_13Type PARTICLE_TYPE = new Particle1_13Type();
 
     public static final PacketHandler POS_TO_3_INT = new PacketHandler() {
         @Override
         public void handle(PacketWrapper wrapper) throws Exception {
             Position position = wrapper.read(Type.POSITION);
-            wrapper.write(Type.INT, position.getX().intValue());
-            wrapper.write(Type.INT, position.getY().intValue());
-            wrapper.write(Type.INT, position.getZ().intValue());
+            wrapper.write(Type.INT, position.getX());
+            wrapper.write(Type.INT, (int) position.getY());
+            wrapper.write(Type.INT, position.getZ());
         }
     };
 
@@ -192,12 +191,57 @@ public class Protocol1_13To1_12_2 extends Protocol {
         registerOutgoing(State.PLAY, 0x07, 0x07, new PacketRemapper() {
             @Override
             public void registerMap() {
-                // TODO: This packet has changed
-
                 handler(new PacketHandler() {
                     @Override
                     public void handle(PacketWrapper wrapper) throws Exception {
-                        wrapper.cancel();
+                        int size = wrapper.passthrough(Type.VAR_INT);
+                        for (int i = 0; i < size; i++) {
+                            String name = wrapper.read(Type.STRING);
+                            String[] split = name.split("\\.");
+                            int categoryId = 0;
+                            int newId = 0;
+                            if (split.length == 2) {
+                                // Custom types
+                                categoryId = 8;
+                                Integer newIdRaw = StatisticMappings.statistics.get(name);
+                                if (newIdRaw != null) {
+                                    newId = newIdRaw;
+                                }
+                            } else {
+                                String category = split[1];
+                                //TODO convert string ids (blocks, items, entities)
+                                switch (category) {
+                                    case "mineBlock":
+                                        categoryId = 0;
+                                        break;
+                                    case "craftItem":
+                                        categoryId = 1;
+                                        break;
+                                    case "useItem":
+                                        categoryId = 2;
+                                        break;
+                                    case "breakItem":
+                                        categoryId = 3;
+                                        break;
+                                    case "pickup":
+                                        categoryId = 4;
+                                        break;
+                                    case "drop":
+                                        categoryId = 5;
+                                        break;
+                                    case "killEntity":
+                                        categoryId = 6;
+                                        break;
+                                    case "entityKilledBy":
+                                        categoryId = 7;
+                                        break;
+                                }
+                            }
+
+                            wrapper.write(Type.VAR_INT, categoryId); // category id
+                            wrapper.write(Type.VAR_INT, newId); // statistics id
+                            wrapper.passthrough(Type.VAR_INT); // value
+                        }
                     }
                 });
             }
@@ -295,9 +339,11 @@ public class Protocol1_13To1_12_2 extends Protocol {
                 });
             }
         });
+
         // InventoryPackets 0x14 -> 0x15
         // InventoryPackets 0x15 -> 0x16
         // InventoryPackets 0x16 -> 0x17
+
         // Set cooldown
         registerOutgoing(State.PLAY, 0x17, 0x18, new PacketRemapper() {
             @Override
@@ -515,14 +561,11 @@ public class Protocol1_13To1_12_2 extends Protocol {
                                                     Item[] clone = ingredient.clone(); // Clone because array and item is mutable
                                                     for (int i = 0; i < clone.length; i++) {
                                                         if (clone[i] == null) continue;
-                                                        clone[i] = new Item(clone[i].getId(), clone[i].getAmount(),
-                                                                (short) 0, null);
+                                                        clone[i] = new Item(clone[i]);
                                                     }
                                                     wrapper.write(Type.FLAT_ITEM_ARRAY_VAR_INT, clone);
                                                 }
-                                                wrapper.write(Type.FLAT_ITEM, new Item(
-                                                        entry.getValue().getResult().getId(),
-                                                        entry.getValue().getResult().getAmount(), (short) 0, null));
+                                                wrapper.write(Type.FLAT_ITEM, new Item(entry.getValue().getResult()));
                                                 break;
                                             }
                                             case "crafting_shaped": {
@@ -533,14 +576,11 @@ public class Protocol1_13To1_12_2 extends Protocol {
                                                     Item[] clone = ingredient.clone(); // Clone because array and item is mutable
                                                     for (int i = 0; i < clone.length; i++) {
                                                         if (clone[i] == null) continue;
-                                                        clone[i] = new Item(clone[i].getId(), clone[i].getAmount(),
-                                                                (short) 0, null);
+                                                        clone[i] = new Item(clone[i]);
                                                     }
                                                     wrapper.write(Type.FLAT_ITEM_ARRAY_VAR_INT, clone);
                                                 }
-                                                wrapper.write(Type.FLAT_ITEM, new Item(
-                                                        entry.getValue().getResult().getId(),
-                                                        entry.getValue().getResult().getAmount(), (short) 0, null));
+                                                wrapper.write(Type.FLAT_ITEM, new Item(entry.getValue().getResult()));
                                                 break;
                                             }
                                             case "smelting": {
@@ -548,13 +588,10 @@ public class Protocol1_13To1_12_2 extends Protocol {
                                                 Item[] clone = entry.getValue().getIngredient().clone(); // Clone because array and item is mutable
                                                 for (int i = 0; i < clone.length; i++) {
                                                     if (clone[i] == null) continue;
-                                                    clone[i] = new Item(clone[i].getId(), clone[i].getAmount(),
-                                                            (short) 0, null);
+                                                    clone[i] = new Item(clone[i]);
                                                 }
                                                 wrapper.write(Type.FLAT_ITEM_ARRAY_VAR_INT, clone);
-                                                wrapper.write(Type.FLAT_ITEM, new Item(
-                                                        entry.getValue().getResult().getId(),
-                                                        entry.getValue().getResult().getAmount(), (short) 0, null));
+                                                wrapper.write(Type.FLAT_ITEM, new Item(entry.getValue().getResult()));
                                                 wrapper.write(Type.FLOAT, entry.getValue().getExperience());
                                                 wrapper.write(Type.VAR_INT, entry.getValue().getCookingTime());
                                                 break;
@@ -1132,9 +1169,6 @@ public class Protocol1_13To1_12_2 extends Protocol {
     protected void register(ViaProviders providers) {
         providers.register(BlockEntityProvider.class, new BlockEntityProvider());
         providers.register(PaintingProvider.class, new PaintingProvider());
-        if (Via.getConfig().get1_13TabCompleteDelay() > 0) {
-            Via.getPlatform().runRepeatingSync(new TabCompleteThread(), 1L);
-        }
     }
 
     private int getNewSoundID(final int oldID) {
