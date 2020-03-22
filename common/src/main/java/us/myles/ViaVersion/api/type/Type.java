@@ -121,8 +121,6 @@ public abstract class Type<T> implements ByteBufReader<T>, ByteBufWriter<T> {
 
     public static final Type<VillagerData> VILLAGER_DATA = new VillagerDataType();
 
-    public static final Type<Particle> PARTICLE_1_14 = new Particle1_14Type();
-
     /* 1.13 Flat Item (no data) */
     public static final Type<Item> FLAT_ITEM = new FlatItemType();
     public static final Type<Item> FLAT_VAR_INT_ITEM = new FlatVarIntItemType();
