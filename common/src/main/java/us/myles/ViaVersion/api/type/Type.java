@@ -6,7 +6,6 @@ import us.myles.ViaVersion.api.minecraft.*;
 import us.myles.ViaVersion.api.minecraft.item.Item;
 import us.myles.ViaVersion.api.type.types.*;
 import us.myles.ViaVersion.api.type.types.minecraft.*;
-import us.myles.ViaVersion.protocols.protocol1_13to1_12_2.data.Particle;
 
 import java.util.UUID;
 
